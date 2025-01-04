@@ -1,0 +1,17 @@
+SERIES = [
+    ("Baldur's Gate", "Baldur's Gate 2"),
+    ('Red Dead Redemption', 'Red Dead Redemption 2'),
+    ('The Witcher 2: Assassin of Kings', 'The Witcher 3: Wild Hunt'),
+    ('Metal Gear Solid', 'Metal Gear Solid 2: Sons of Liberty', 'Metal Gear Solid 3: Snake Eater', 'METAL GEAR SOLID V: The Phantom Pain'),
+    ('The Legend of Zelda: Ocarina of Time', "The Legend of Zelda: Majora's Mask"),
+    ('System Shock (2023)', 'System Shock 2'),
+    ('Earthbound', 'Mother 3'),
+    ('Donkey Kong Country', "Donkey Kong Country 2: Diddy's Kong Quest", 'Donkey Kong Country: Tropical Freeze'),
+    ('Star Wars, Dark Forces Remaster', 'Star Wars Jedi Knight: Dark Forces II', 'Star Wars Jedi Knight II - Jedi Outcast'),
+    ('Warhammer 40,000: Dawn of War - Dark Crusade', 'Warhammer 40,000: Dawn of War - Soulstorm'),
+    ('Dishonored', 'Dishonored 2'),
+    ('Half-Life 2', 'Half-Life: Alyx'),
+    ('Super Mario Bros.', 'Super Mario Bros. 2', 'Super Mario Bros. 3', 'Super Mario World', "Super Mario World 2: Yoshi's Island", 'Super Mario Bros. Wonder'),
+    ('Persona 3 Reload', 'Persona 4 Golden'),
+    ('Psychonauts', 'Psychonauts 2'),
+]
