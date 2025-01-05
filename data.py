@@ -6,6 +6,7 @@ from fuzzywuzzy import fuzz
 import joblib
 import pandas as pd
 import numpy as np
+from howlongtobeatpy import HowLongToBeat, SearchModifiers
 
 from model.model import update_model_scores
 
@@ -223,7 +224,78 @@ def update_metacritic(metacritic_url, title=None, dry_run=False):
     return game_idx, title
 
 
-def update_game(metacritic_url=None, title=None, oc_distance_threshold=0.1, dry_run=False, classic=False, rating=None):
+def fetch_hltb(title, hltb_id=None, distance_threshold=0.15):
+    hltb_fields = [
+        'game_id',
+        'game_name',
+        'game_name_date',
+        'game_alias',
+        'game_type',
+        'game_image',
+        'comp_lvl_combine',
+        'comp_lvl_sp',
+        'comp_lvl_co',
+        'comp_lvl_mp',
+        'comp_main',
+        'comp_plus',
+        'comp_100',
+        'comp_all',
+        'comp_main_count',
+        'comp_plus_count',
+        'comp_100_count',
+        'comp_all_count',
+        'invested_co',
+        'invested_mp',
+        'invested_co_count',
+        'invested_mp_count',
+        'count_comp',
+        'count_speedrun',
+        'count_backlog',
+        'count_review',
+        'review_score',
+        'count_playing',
+        'count_retired',
+        'profile_platform',
+        'profile_popular',
+        'release_world'
+    ]
+
+    if hltb_id is not None:
+        result = HowLongToBeat().search_from_id(hltb_id).json_content
+    else:
+        results_list = HowLongToBeat(distance_threshold).search(title, search_modifiers=SearchModifiers.HIDE_DLC)
+        if results_list is not None and len(results_list) > 0:
+            result = max(results_list, key=lambda element: element.similarity)
+            result = result.json_content
+        else:
+            results_list = HowLongToBeat(distance_threshold).search(title, search_modifiers=SearchModifiers.ISOLATE_DLC)
+            if results_list is not None and len(results_list) > 0:
+                result = max(results_list, key=lambda element: element.similarity)
+                result = result.json_content
+            else:
+                result = {n: np.nan for n in hltb_fields}
+    return result
+
+
+def update_hltb(title, game_idx=None, hltb_id=None, distance_threshold=0.15, dry_run=False):
+    df = pd.read_csv('game_log.csv')
+    if game_idx is None:
+        game_idx = _find_game_idx(df, title)
+
+    game_data = fetch_hltb(title=title, hltb_id=hltb_id, distance_threshold=distance_threshold)
+    hltb_df = pd.DataFrame(index=[int(game_idx)], data=game_data)
+    hltb_df.rename(columns=lambda x: f'{x}_hltb', inplace=True)
+    df.loc[int(game_idx), hltb_df.columns] = hltb_df.loc[int(game_idx), hltb_df.columns]
+
+    if dry_run:
+        df.to_csv('cache/game_log_hltb_test.csv', index=False)
+    else:
+        df.to_csv('game_log.csv', index=False)
+
+
+def update_game(
+        metacritic_url=None, title=None, oc_distance_threshold=0.1, hltb_distance_threshold=0.15,
+        dry_run=False, classic=False, rating=None):
     df = pd.read_csv('game_log.csv')
     print(metacritic_url, title)
     if metacritic_url is None:
@@ -245,6 +317,7 @@ def update_game(metacritic_url=None, title=None, oc_distance_threshold=0.1, dry_
     print(metacritic_url, title)
     update_opencritic(title=title, game_idx=game_idx, distance_threshold=oc_distance_threshold, dry_run=dry_run)
     update_igdb_info(title=title, game_idx=game_idx, dry_run=dry_run)
+    update_hltb(title=title, game_idx=game_idx, dry_run=dry_run, distance_threshold=hltb_distance_threshold)
     update_model_scores()
     df = pd.read_csv('game_log.csv')
     return df.loc[game_idx, ['Title', 'My Rating', 'raw_score', 'model_score']]

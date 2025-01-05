@@ -49,11 +49,14 @@ def update_model_scores():
     original_columns = original_columns | {'raw_score'}
     df.loc[:, list(original_columns)].to_csv('game_log.csv', index=False)
 
-    backlog_cols = ['Title', 'raw_score', 'release_date', 'genre_metacritic', 'developer_metacritic']
+    df['time_est'] = df['comp_all_hltb'] / 3600
+
+    backlog_cols = ['Title', 'raw_score', 'time_est', 'release_date', 'genre_metacritic', 'developer_metacritic']
     backlog_df = df.loc[df['My Rating'].isnull(), backlog_cols]
     backlog_df['model_score'] = df['raw_score'].copy()
     backlog_df['model_score'] = adjust_sequels(df)
-    backlog_df \
+    backlog_df.loc[:, ['Title', 'model_score', 'raw_score', 'time_est', 'release_date', 'genre_metacritic',
+                       'developer_metacritic']] \
         .sort_values('model_score', ascending=False) \
         .to_csv(MODEL_DIR.parent / 'backlog.csv', index=False)
 
