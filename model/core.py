@@ -6,25 +6,39 @@ import pandas as pd
 
 MODEL_DIR = Path(__file__).parent
 CATEGORICAL_FEATURES = [
-    'tier',
-    'genre_metacritic',
+    #'tier',
+    #'genre_metacritic',
     'developer_metacritic',
 ]
 
 NUMERICAL_FEATURES = [
+    #opencritic
     'percentRecommended',
     'numReviews',
     'numTopCriticReviews',
     'medianScore',
     'topCriticScore',
-    'percentile',
+    #'percentile',
+
+    #igdb
     'aggregated_rating_igdb',
     'aggregated_rating_count_igdb',
     'rating_igdb',
     'rating_count_igdb',
-    'age',
+    'age_comb',
+
+    #metacritic
     'metaScore_metacritic',
     'userScore_metacritic',
+
+    #HowLongToBeeat
+    #'count_review_hltb',
+    #'count_retired_hltb',
+    'count_comp_hltb',
+    'review_score_hltb',
+    'retire_rate_hltb',
+
+    #Recs Features
     'AM',
     'BR',
     'Brandon',
@@ -32,6 +46,8 @@ NUMERICAL_FEATURES = [
     'EC',
     'Jackie',
     'Nick',
+    'Fabio',
+    'Kaleb',
     'Sterling',
     'Yahtzee',
     'Classic',
@@ -44,11 +60,12 @@ DICT_FEATURES = [
 
 LIST_FEATURES = [
     'genre_mc_clean',
-    'game_engines_igdb',
+    #'game_engines_igdb',
     'genres_igdb',
-    'keywords_igdb',
-    'similar_games_igdb',
+    #'keywords_igdb',
+    #'similar_games_igdb',
     'themes_igdb',
+    'platform_hltb_clean',
 ]
 
 TARGET = 'My Rating'
@@ -75,6 +92,12 @@ def _prepare_dataframe(df):
     df['Companies'] = df['Companies'].apply(_safe_loads)
     df['Genres'] = df['Genres'].apply(_safe_loads)
     df['genre_mc_clean'] = df.loc[:, 'genre_metacritic'].fillna('').str.replace("-","")
+    df['platform_hltb_clean'] = df['profile_platform_hltb'].astype(str).str.split(', ').astype(str)
+    df['retire_rate_hltb'] = df['count_retired_hltb'] / df['count_comp_hltb']
+    df['retire_rate_hltb'] = df['retire_rate_hltb'].where(df['count_comp_hltb'] > 5)
+    df['review_score_hltb'] = df['review_score_hltb'].where(df['count_review_hltb'] > 5)
+    df['age_hltb'] = (2025 - df['release_world_hltb']) * 365
+    df['age_comb'] = df['age'].fillna(df['age_hltb'])
     df.loc[:, 'AM':] = df.loc[:, 'AM':].fillna(0.)
     df.loc[:, LIST_FEATURES] = df.loc[:, LIST_FEATURES].fillna('[]')
     return df

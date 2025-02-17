@@ -7,7 +7,7 @@ from sklearn.feature_extraction import DictVectorizer
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
 from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.preprocessing import OneHotEncoder
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.model_selection import GridSearchCV
 from sklearn.svm import SVR
 
@@ -16,37 +16,16 @@ from .core import LIST_FEATURES, NUMERICAL_FEATURES, CATEGORICAL_FEATURES, DICT_
 SEARCH_SCORING_METRIC = 'neg_mean_squared_error'
 SEARCH_CV_SPLIT = 5
 PARAMS = {
-    'rgr__C': np.logspace(-2,2, 5),
+    'rgr__C': [1, 10, 100],
     'rgr__shrinking': [True],
     'rgr__gamma': ['auto', 'scale', 0.01, 0.1, 1, 10],
-    'rgr__epsilon': np.logspace(-8,0,9),
 }
 
-FEATURES = [
-    'developer_metacritic',
-    'percentRecommended',
-    'rating_igdb',
-    'metaScore_metacritic',
-    'userScore_metacritic',
-    'AM',
-    'BR',
-    'Brandon',
-    'Buried Treasure',
-    'EC',
-    'Jackie',
-    'Nick',
-    'Sterling',
-    'Yahtzee',
-    'Companies',
-    'Genres',
-    'genre_mc_clean',
-]
-
 # categorize features by preprocessing
-numerical_features = [n for n in FEATURES if n in NUMERICAL_FEATURES]
-categorical_features = [n for n in FEATURES if n in CATEGORICAL_FEATURES]
-dict_features = [n for n in FEATURES if n in DICT_FEATURES]
-list_features = [n for n in FEATURES if n in LIST_FEATURES]
+numerical_features = NUMERICAL_FEATURES
+categorical_features = CATEGORICAL_FEATURES
+dict_features = DICT_FEATURES
+list_features = LIST_FEATURES
 
 list_transformers = []
 for n in list_features:
@@ -61,16 +40,21 @@ categorical_transformer = Pipeline([
     ('encode', OneHotEncoder(handle_unknown='ignore')),
 ])
 
+numeric_transformer = Pipeline([
+    ('impute', SimpleImputer()),
+    ('scale', StandardScaler()),
+])
+
 nonlist_transformers = [
     ('categorical', categorical_transformer, categorical_features),
-    ('numerical', SimpleImputer(), numerical_features),
+    ('numerical', numeric_transformer, numerical_features),
 ]
 
 column_transformer = ColumnTransformer(transformers=nonlist_transformers+list_transformers+dict_transformers, sparse_threshold=0)
 
 model = Pipeline([
     ('preprocess', column_transformer),
-    ('rgr', SVR(max_iter=10000000, tol=1e-4, kernel='rbf')
+    ('rgr', SVR(max_iter=10000000, tol=1e-3, kernel='rbf')
      )
 ])
 
@@ -96,12 +80,11 @@ def main():
         ('preprocess', column_transformer),
         ('rgr', SVR(
             max_iter=10000000,
-            tol=1e-4,
+            tol=1e-3,
             kernel='rbf',
             C=cv_df.loc[1, 'param_rgr__C'],
             shrinking=cv_df.loc[1, 'param_rgr__shrinking'],
             gamma=cv_df.loc[1, 'param_rgr__gamma'],
-            epsilon=cv_df.loc[1, 'param_rgr__epsilon'],
         )
          )
     ])

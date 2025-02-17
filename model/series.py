@@ -14,4 +14,5 @@ SERIES = [
     ('Super Mario Bros.', 'Super Mario Bros. 2', 'Super Mario Bros. 3', 'Super Mario World', "Super Mario World 2: Yoshi's Island", 'Super Mario Bros. Wonder'),
     ('Persona 3 Reload', 'Persona 4 Golden'),
     ('Psychonauts', 'Psychonauts 2'),
+    ('Pillars of Eternity', 'Pillars of Eternity II: Deadfire'),
 ]

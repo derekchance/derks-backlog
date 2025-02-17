@@ -11,8 +11,21 @@ from .core import TARGET
 from .rbf import main as rbf
 from .ridge import main as ridge
 from .xgb import main as xgb
+from .linear_svr import main as linear_svr
+from .elasticnet import main as elasticnet
 from .stacking import main as stacking
+from sklearn.mixture import GaussianMixture
+from sklearn.model_selection import GridSearchCV
 
+param_grid = {
+    "n_components": range(1, 21),
+    "covariance_type": ["spherical", "tied", "diag", "full"],
+}
+
+def gmm_bic_score(estimator, X):
+    """Callable to pass to GridSearchCV that will use the BIC score."""
+    # Make it negative since GridSearchCV expects a score to maximize
+    return -estimator.bic(X)
 
 def adjust_sequels(df):
     """Gives preference to earlier titles in series with better scoring sequels"""
@@ -39,12 +52,12 @@ def adjust_sequels(df):
     return df.model_score
 
 
-def update_model_scores():
+def update_model_scores(model='stacking'):
     df = pd.read_csv(MODEL_DIR.parent / 'game_log.csv')
     original_columns = set(df.columns.to_list())
     test_df = load_dataset()
 
-    model = joblib.load(MODEL_DIR / 'models/stacking_model.joblib')
+    model = joblib.load(MODEL_DIR / f'models/{model}_model.joblib')
     df['raw_score'] = model.predict(test_df)
     original_columns = original_columns | {'raw_score'}
     df.loc[:, list(original_columns)].to_csv('game_log.csv', index=False)
@@ -52,17 +65,47 @@ def update_model_scores():
     df['time_est'] = df['comp_all_hltb'] / 3600
 
     backlog_cols = ['Title', 'raw_score', 'time_est', 'release_date', 'genre_metacritic', 'developer_metacritic']
-    backlog_df = df.loc[df['My Rating'].isnull(), backlog_cols]
-    backlog_df['model_score'] = df['raw_score'].copy()
-    backlog_df['model_score'] = adjust_sequels(df)
+    backlog_df = df.loc[df.Finished == 0, backlog_cols]
+
+    backlog_df['model_score'] = backlog_df['raw_score'].copy()
+    backlog_df['model_score'] = adjust_sequels(backlog_df)
+
+    #grid_search = GridSearchCV(
+    #    GaussianMixture(), param_grid=param_grid, scoring=gmm_bic_score
+    #)
+    #grid_search.fit(backlog_df['model_score'].to_frame())
+    #backlog_df['tier'] = grid_search.predict(backlog_df['model_score'].to_frame())
+
     backlog_df.loc[:, ['Title', 'model_score', 'raw_score', 'time_est', 'release_date', 'genre_metacritic',
                        'developer_metacritic']] \
         .sort_values('model_score', ascending=False) \
         .to_csv(MODEL_DIR.parent / 'backlog.csv', index=False)
 
-    log_cols = ['Title', 'My Rating', 'raw_score', 'release_date', 'genre_metacritic', 'developer_metacritic']
+    played_df = df.loc[df['Finished'] == 1, :].copy()
+    played_df['Err'] = played_df['My Rating'] - played_df['raw_score']
+    played_df['Err_z'] = (played_df['Err'].abs() - played_df['Err'].abs().mean()) / played_df['Err'].abs().std()
+    played_df['raw_score_z'] = (played_df['raw_score'] - played_df['raw_score'].mean()) / played_df['raw_score'].std()
+    played_df['mr_z'] = (played_df['My Rating'] - played_df['My Rating'].mean()) / played_df['My Rating'].std()
+    played_df['replay_score'] = played_df[['Err_z', 'raw_score_z', 'mr_z']].mean(axis=1)
 
-    df.loc[df['My Rating'].notna(), log_cols] \
+    replay_bl = [
+        'Super Smash Bros.',
+        'Horizon Zero Dawn',
+        'Hades',
+        'Tetris',
+        'Portal',
+        'Cyberpunk 2077',
+        'Super Smash Bros. Melee',
+        'Bioshock',
+        'Outer Wilds',
+        'Fallout: New Vegas',
+    ]
+    played_df['replay_score'] = played_df.replay_score.where(~played_df['Title'].isin(replay_bl), 0)
+    played_df['replay_score'] = played_df.replay_score.where(pd.to_datetime(played_df.release_date).dt.year < 2024, 0)
+
+    log_cols = ['Title', 'My Rating', 'raw_score', 'replay_score', 'release_date', 'genre_metacritic', 'developer_metacritic']
+
+    played_df.loc[:, log_cols] \
         .sort_values('raw_score', ascending=False) \
         .to_csv(MODEL_DIR.parent / 'simple_log.csv', index=False)
 
@@ -71,8 +114,12 @@ def update_models():
     print('Updating models')
     print('SVR (radial basis)...')
     rbf()
+    #print('SVR (linear)...')
+    #linear_svr()
     print('Ridge...')
     ridge()
+    print('ElasticNet...')
+    elasticnet()
     print('XGB...')
     xgb()
     print('Stacking Models (like legos)')

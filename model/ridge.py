@@ -5,7 +5,7 @@ from sklearn.feature_extraction import DictVectorizer
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
 from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.preprocessing import OneHotEncoder
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.model_selection import GridSearchCV
 from sklearn.linear_model import Ridge
 
@@ -15,29 +15,11 @@ ALPHA_SPACE = [0.01, 0.01, 0.05, 1, 2, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 10
 SEARCH_SCORING_METRIC = 'neg_mean_squared_error'
 SEARCH_CV_SPLIT = 5
 
-FEATURES = [
-    'developer_metacritic',
-    'aggregated_rating_igdb',
-    'aggregated_rating_count_igdb',
-    'rating_igdb',
-    'rating_count_igdb',
-    'age',
-    'metaScore_metacritic',
-    'userScore_metacritic',
-    'BR',
-    'Brandon',
-    'Sterling',
-    'Yahtzee',
-    'Classic',
-    'Companies',
-    'genre_mc_clean',
-]
-
 # categorize features by preprocessing
-numerical_features = [n for n in FEATURES if n in NUMERICAL_FEATURES]
-categorical_features = [n for n in FEATURES if n in CATEGORICAL_FEATURES]
-dict_features = [n for n in FEATURES if n in DICT_FEATURES]
-list_features = [n for n in FEATURES if n in LIST_FEATURES]
+numerical_features = NUMERICAL_FEATURES
+categorical_features = CATEGORICAL_FEATURES
+dict_features = DICT_FEATURES
+list_features = LIST_FEATURES
 
 list_transformers = []
 for n in list_features:
@@ -52,16 +34,21 @@ categorical_transformer = Pipeline([
     ('encode', OneHotEncoder(handle_unknown='ignore')),
 ])
 
+numeric_transformer = Pipeline([
+    ('impute', SimpleImputer()),
+    ('scale', StandardScaler()),
+])
+
 nonlist_transformers = [
     ('categorical', categorical_transformer, categorical_features),
-    ('numerical', SimpleImputer(), numerical_features),
+    ('numerical', numeric_transformer, numerical_features),
 ]
 
 column_transformer = ColumnTransformer(transformers=nonlist_transformers+list_transformers+dict_transformers, sparse_threshold=0)
 
 model = Pipeline([
     ('preprocess', column_transformer),
-    ('rgr', Ridge(solver='svd', random_state=42)
+    ('rgr', Ridge(solver='svd')
      )
 ])
 
