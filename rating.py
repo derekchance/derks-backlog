@@ -145,7 +145,7 @@ def tournament(n=n_trials):
 
     for n in range(n_trials):
         winners = []
-        comp_df = df.loc[df.Title.isin(competitors), ['Title', 'elo']].T
+        comp_df = df.loc[df.Title.isin(competitors), ['Title', 'elo', 'glicko']].T
         while comp_df.shape[1] > 1:
             low, high = comp_df.loc['glicko'].idxmin(), comp_df.loc['glicko'].idxmax()
             low_game = comp_df.pop(low).Title

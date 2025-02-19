@@ -68,7 +68,7 @@ LIST_FEATURES = [
     'platform_hltb_clean',
 ]
 
-TARGET = 'My Rating'
+TARGET = 'glicko'
 
 FEATURES = CATEGORICAL_FEATURES + NUMERICAL_FEATURES + DICT_FEATURES + LIST_FEATURES
 
