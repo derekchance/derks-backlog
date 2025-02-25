@@ -8,6 +8,7 @@ from .series import SERIES
 from .core import load_dataset
 from .core import MODEL_DIR
 from .core import TARGET
+from .core import richard_curve
 from .rbf import main as rbf
 from .ridge import main as ridge
 from .xgb import main as xgb
@@ -82,28 +83,26 @@ def update_model_scores(model='stacking'):
         .to_csv(MODEL_DIR.parent / 'backlog.csv', index=False)
 
     played_df = df.loc[df['Finished'] == 1, :].copy()
-    played_df['Err'] = played_df['My Rating'] - played_df['raw_score']
+    played_df['Err'] = played_df[TARGET] - played_df['raw_score']
     played_df['Err_z'] = (played_df['Err'].abs() - played_df['Err'].abs().mean()) / played_df['Err'].abs().std()
     played_df['raw_score_z'] = (played_df['raw_score'] - played_df['raw_score'].mean()) / played_df['raw_score'].std()
-    played_df['mr_z'] = (played_df['My Rating'] - played_df['My Rating'].mean()) / played_df['My Rating'].std()
-    played_df['replay_score'] = played_df[['Err_z', 'raw_score_z', 'mr_z']].mean(axis=1)
+    played_df[f'{TARGET}_z'] = (played_df[TARGET] - played_df[TARGET].mean()) / played_df[TARGET].std()
+    played_df['replay_score'] = played_df[['raw_score_z', f'{TARGET}_z']].mean(axis=1)
+    played_df['last_played'] = pd.to_datetime(df.last_played, errors='coerce')
+
+    played_df['last_played_weight'] = richard_curve(
+        (pd.Timestamp.now() - played_df.last_played).dt.days).fillna(1)
+
+    played_df['replay_score'] *= played_df['last_played_weight']
 
     replay_bl = [
         'Super Smash Bros.',
-        'Horizon Zero Dawn',
-        'Hades',
         'Tetris',
-        'Portal',
-        'Cyberpunk 2077',
         'Super Smash Bros. Melee',
-        'Bioshock',
-        'Outer Wilds',
-        'Fallout: New Vegas',
     ]
     played_df['replay_score'] = played_df.replay_score.where(~played_df['Title'].isin(replay_bl), 0)
-    played_df['replay_score'] = played_df.replay_score.where(pd.to_datetime(played_df.release_date).dt.year < 2024, 0)
 
-    log_cols = ['Title', 'My Rating', 'raw_score', 'replay_score', 'release_date', 'genre_metacritic', 'developer_metacritic']
+    log_cols = ['Title', 'glicko', 'raw_score', 'replay_score', 'last_played', 'last_played_weight', 'release_date', 'genre_metacritic', 'developer_metacritic']
 
     played_df.loc[:, log_cols] \
         .sort_values('raw_score', ascending=False) \
@@ -114,8 +113,8 @@ def update_models():
     print('Updating models')
     print('SVR (radial basis)...')
     rbf()
-    #print('SVR (linear)...')
-    #linear_svr()
+    print('SVR (linear)...')
+    linear_svr()
     print('Ridge...')
     ridge()
     print('ElasticNet...')

@@ -2,11 +2,13 @@ from pathlib import Path
 from os import path
 import numpy as np
 import joblib
+from sklearn import set_config
 from sklearn.ensemble import StackingRegressor
 from sklearn.model_selection import cross_validate
 
 from .core import MODEL_DIR, load_Xy
 
+set_config(transform_output='pandas')
 
 def main():
     X, y = load_Xy()
@@ -25,7 +27,7 @@ def main():
             ('xgb', xgb_model),
             #('xgb2', xgb_model2),
             #('xgb3', xgb_model3),
-            #('svr', svr_model),
+            ('svr', svr_model),
             ('rbf', rbf_model),
         ],
         cv=5,

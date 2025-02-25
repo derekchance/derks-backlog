@@ -4,10 +4,12 @@ import numpy as np
 
 parser = argparse.ArgumentParser()
 parser.add_argument('n_trials')
+parser.add_argument('--game', default=None)
 args = parser.parse_args()
 
 n_trials = int(args.n_trials)
-
+game = args.game
+print(game)
 
 def reset_ratings():
     df = pd.read_csv('game_log.csv')
@@ -21,7 +23,7 @@ def reset_ratings():
 def trial(game_a=None, game_b=None, primary_rating='glicko'):
     df = pd.read_csv('game_log.csv')
     played_df = df.loc[df.Finished == 1].copy()
-
+    print(game_a)
     if game_a is None:
         weights = (1 + played_df['Trials'].max() - played_df['Trials']) ** 2
         weights = np.where(
@@ -34,7 +36,7 @@ def trial(game_a=None, game_b=None, primary_rating='glicko'):
 
     if game_b is None:
         dist = (game_a_elo - played_df[primary_rating]).abs()
-        weights = 1/(dist + 1)**2
+        weights = 1/(dist + 1)**3
         weights = np.where(played_df.Title == game_a,
                            0,
                            weights,
@@ -156,4 +158,4 @@ def tournament(n=n_trials):
 
 
 if __name__ == '__main__':
-    trials(n=n_trials)
+    trial(game_a=game)
