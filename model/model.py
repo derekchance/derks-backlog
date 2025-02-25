@@ -15,8 +15,7 @@ from .xgb import main as xgb
 from .linear_svr import main as linear_svr
 from .elasticnet import main as elasticnet
 from .stacking import main as stacking
-from sklearn.mixture import GaussianMixture
-from sklearn.model_selection import GridSearchCV
+from sklearn.preprocessing import MinMaxScaler
 
 param_grid = {
     "n_components": range(1, 21),
@@ -88,8 +87,9 @@ def update_model_scores(model='stacking'):
     played_df['raw_score_z'] = (played_df['raw_score'] - played_df['raw_score'].mean()) / played_df['raw_score'].std()
     played_df[f'{TARGET}_z'] = (played_df[TARGET] - played_df[TARGET].mean()) / played_df[TARGET].std()
     played_df['replay_score'] = played_df[['raw_score_z', f'{TARGET}_z']].mean(axis=1)
-    played_df['last_played'] = pd.to_datetime(df.last_played, errors='coerce')
+    played_df['replay_score'] = MinMaxScaler().fit_transform(played_df['replay_score'].to_frame())
 
+    played_df['last_played'] = pd.to_datetime(df.last_played, errors='coerce')
     played_df['last_played_weight'] = richard_curve(
         (pd.Timestamp.now() - played_df.last_played).dt.days).fillna(1)
 
