@@ -3,6 +3,7 @@ from pathlib import Path
 import joblib
 import pandas as pd
 import numpy as np
+from sklearn.preprocessing import MinMaxScaler
 
 from .series import SERIES
 from .core import load_dataset
@@ -15,7 +16,7 @@ from .xgb import main as xgb
 from .linear_svr import main as linear_svr
 from .elasticnet import main as elasticnet
 from .stacking import main as stacking
-from sklearn.preprocessing import MinMaxScaler
+
 
 param_grid = {
     "n_components": range(1, 21),
@@ -76,10 +77,11 @@ def update_model_scores(model='stacking'):
     #grid_search.fit(backlog_df['model_score'].to_frame())
     #backlog_df['tier'] = grid_search.predict(backlog_df['model_score'].to_frame())
 
-    backlog_df.loc[:, ['Title', 'model_score', 'raw_score', 'time_est', 'release_date', 'genre_metacritic',
+    final_backlog_df = backlog_df.loc[:, ['Title', 'model_score', 'raw_score', 'time_est', 'release_date', 'genre_metacritic',
                        'developer_metacritic']] \
-        .sort_values('model_score', ascending=False) \
-        .to_csv(MODEL_DIR.parent / 'backlog.csv', index=False)
+        .sort_values('model_score', ascending=False)
+
+    final_backlog_df.to_csv(MODEL_DIR.parent / 'backlog.csv', index=False)
 
     played_df = df.loc[df['Finished'] == 1, :].copy()
     played_df['Err'] = played_df[TARGET] - played_df['raw_score']
