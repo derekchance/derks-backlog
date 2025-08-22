@@ -295,7 +295,7 @@ def update_hltb(title, game_idx=None, hltb_id=None, distance_threshold=0.15, dry
 
 def update_game(
         metacritic_url=None, title=None, oc_distance_threshold=0.1, hltb_distance_threshold=0.15,
-        dry_run=False, classic=False, rating=None):
+        dry_run=False, classic=False, soulslike=False, rating=None):
     df = pd.read_csv('game_log.csv')
     print(metacritic_url, title)
     if metacritic_url is None:
@@ -307,12 +307,15 @@ def update_game(
 
     game_idx, title = update_metacritic(metacritic_url=metacritic_url, title=title, dry_run=dry_run)
     df = pd.read_csv('game_log.csv')
+    df['Finished'] = df['Finished'].fillna(0.)
     if classic:
         df.loc[game_idx, 'Classic'] = 1
     else:
         df.loc[game_idx, 'Classic'] = 0
-    if rating is not None:
-        df.loc[game_idx, 'My Rating'] = rating
+    if soulslike:
+        df.loc[game_idx, 'soulslike'] = 1
+    else:
+        df.loc[game_idx, 'soulslike'] = 0
     df.to_csv('game_log.csv', index=False)
     print(metacritic_url, title)
     update_opencritic(title=title, game_idx=game_idx, distance_threshold=oc_distance_threshold, dry_run=dry_run)
@@ -320,5 +323,19 @@ def update_game(
     update_hltb(title=title, game_idx=game_idx, dry_run=dry_run, distance_threshold=hltb_distance_threshold)
     update_model_scores()
     df = pd.read_csv('game_log.csv')
-    return df.loc[game_idx, ['Title', 'My Rating', 'raw_score', 'model_score']]
+    return df.loc[game_idx, ['Title', 'glicko', 'raw_score', 'model_score']]
 
+
+def mark_played(title, played=None):
+    df = pd.read_csv('game_log.csv')
+    game_idx = _find_game_idx(df, title)
+
+    if played is None:
+        from datetime import date
+        played = date.today().isoformat()
+    else:
+        # functional duck type to ensure passed value is a date
+        played = pd.to_datetime(played).date().isoformat()
+
+    df.loc[game_idx, 'last_played'] = played
+    df.to_csv('game_log.csv', index=False)

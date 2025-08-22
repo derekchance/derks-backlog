@@ -2,14 +2,6 @@ import argparse
 import pandas as pd
 import numpy as np
 
-parser = argparse.ArgumentParser()
-parser.add_argument('n_trials')
-parser.add_argument('--game', default=None)
-args = parser.parse_args()
-
-n_trials = int(args.n_trials)
-game = args.game
-print(game)
 
 def reset_ratings():
     df = pd.read_csv('game_log.csv')
@@ -22,7 +14,12 @@ def reset_ratings():
 
 def trial(game_a=None, game_b=None, primary_rating='glicko'):
     df = pd.read_csv('game_log.csv')
+    df['elo'] = df['elo'].fillna(1000)
+    df['Trials'] = df['Trials'].fillna(0)
+    df['glicko_rd'] = df['glicko_rd'].fillna(350)
+    df['glicko'] = df['glicko'].fillna(1200)
     played_df = df.loc[df.Finished == 1].copy()
+
     print(game_a)
     if game_a is None:
         weights = (1 + played_df['Trials'].max() - played_df['Trials']) ** 2
@@ -43,6 +40,7 @@ def trial(game_a=None, game_b=None, primary_rating='glicko'):
                            )
         game_b = played_df.loc[:, 'Title'].sample(n=1, weights=weights).iloc[0]
 
+
     print(f'1: {game_a}')
     print(f'2: {game_b}')
     print('')
@@ -59,6 +57,9 @@ def trial(game_a=None, game_b=None, primary_rating='glicko'):
 
     df.loc[df.Title == game_a, 'Trials'] += 1
     df.loc[df.Title == game_b, 'Trials'] += 1
+
+    df.loc[df.Title == game_a, 'Finished'] = 1
+    df.loc[df.Title == game_b, 'Finished'] = 1
     df.to_csv('game_log.csv', index=False)
 
     elo(games=(game_a, game_b), result=(score_a, score_b))
@@ -138,7 +139,7 @@ def trials(game=None, n=1):
         count += 1
 
 
-def tournament(n=n_trials):
+def tournament(n):
     competitors = 2**n_trials
     df = pd.read_csv('game_log.csv')
     played_df = df.loc[df.Finished == 1].copy()
@@ -158,4 +159,12 @@ def tournament(n=n_trials):
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('n_trials')
+    parser.add_argument('--game', default=None)
+    args = parser.parse_args()
+
+    n_trials = int(args.n_trials)
+    game = args.game
+    print(game)
     trial(game_a=game)

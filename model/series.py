@@ -1,5 +1,5 @@
 SERIES = [
-    ("Baldur's Gate", "Baldur's Gate II: Shadows of Amn"),
+    ("Baldur's Gate", "Baldur's Gate II: Shadows of Amn", "Baldur's Gate III"),
     ('Red Dead Redemption', 'Red Dead Redemption 2'),
     ('The Witcher 2: Assassin of Kings', 'The Witcher 3: Wild Hunt'),
     ('Metal Gear Solid', 'Metal Gear Solid 2: Sons of Liberty', 'Metal Gear Solid 3: Snake Eater', 'METAL GEAR SOLID V: The Phantom Pain'),

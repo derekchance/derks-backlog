@@ -9,8 +9,6 @@ from sklearn.preprocessing import OrdinalEncoder
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction import DictVectorizer
 
-
-
 MODEL_DIR = Path(__file__).parent
 CATEGORICAL_FEATURES = [
     #'tier',
@@ -59,6 +57,9 @@ NUMERICAL_FEATURES = [
     'Kaleb',
     'Sterling',
     'Yahtzee',
+    'hbomberguy',
+    'Tyler',
+    'fightincowboy',
 
     # Self-Engineered Features
     'Classic',
@@ -201,10 +202,10 @@ def load_Xy():
     df = pd.read_csv('game_log.csv')
     df = _prepare_dataframe(df)
 
-    X = df.loc[df[TARGET].notna(), FEATURES]
-    y = df.loc[df[TARGET].notna(), TARGET]
+    X = df.loc[df.Finished == 1, FEATURES]
+    y = df.loc[df.Finished == 1, TARGET]
     return X, y
 
 
-def richard_curve(t, a=0, k=1, b=0.009, v=1, q=1000, c=1):
+def richard_curve(t, a=0, k=1, b=0.0035, v=1, q=100, c=1):
     return a + (k-a)/((c + q * np.e ** (-b * t)) ** (1/v))

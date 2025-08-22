@@ -89,7 +89,7 @@ def update_model_scores(model='stacking'):
     played_df['replay_score'] = played_df[['raw_score_z', f'{TARGET}_z']].mean(axis=1)
     played_df['replay_score'] = MinMaxScaler().fit_transform(played_df['replay_score'].to_frame())
 
-    played_df['last_played'] = pd.to_datetime(df.last_played, errors='coerce')
+    played_df['last_played'] = pd.to_datetime(df.last_played, errors='coerce', format='mixed')
     played_df['last_played_weight'] = richard_curve(
         (pd.Timestamp.now() - played_df.last_played).dt.days).fillna(1)
 
