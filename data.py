@@ -339,6 +339,8 @@ def mark_played(title, played=None):
         # functional duck type to ensure passed value is a date
         played = pd.to_datetime(played).date().isoformat()
 
+    df.loc[game_idx, 'played'] = 1
+    df.loc[game_idx, 'Finished'] = 1
     df.loc[game_idx, 'last_played'] = played
     df.to_csv('game_log.csv', index=False)
 
