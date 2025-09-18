@@ -328,7 +328,7 @@ def update_game(
     return df.loc[game_idx, ['Title', 'glicko', 'raw_score', 'model_score']]
 
 
-def mark_played(title, played=None):
+def mark_played(title, played=None, dropped=False):
     df = pd.read_csv('game_log.csv')
     game_idx = _find_game_idx(df, title)
 
@@ -342,6 +342,9 @@ def mark_played(title, played=None):
     df.loc[game_idx, 'played'] = 1
     df.loc[game_idx, 'Finished'] = 1
     df.loc[game_idx, 'last_played'] = played
+    if dropped:
+        df.loc[game_idx, 'dropped'] = 1
+        df.loc[game_idx, 'glicko'] = 900
     df.to_csv('game_log.csv', index=False)
 
 
@@ -376,7 +379,7 @@ def update_model_scores(model='stacking'):
     final_backlog_df.to_csv(MODEL_DIR.parent / 'backlog.csv', index=False)
     update_backlog_values(df=final_backlog_df.fillna(''))
 
-    played_df = df.loc[df['Finished'] == 1, :].copy()
+    played_df = df.loc[(df['Finished'] == 1) & (df['dropped'] != 1), :].copy()
     played_df['Err'] = played_df[TARGET] - played_df['raw_score']
     played_df['Err_z'] = (played_df['Err'].abs() - played_df['Err'].abs().mean()) / played_df['Err'].abs().std()
     played_df['raw_score_z'] = (played_df['raw_score'] - played_df['raw_score'].mean()) / played_df['raw_score'].std()
@@ -397,7 +400,8 @@ def update_model_scores(model='stacking'):
     ]
     played_df['replay_score'] = played_df.replay_score.where(~played_df['Title'].isin(replay_bl), 0)
 
-    log_cols = ['Title', 'glicko', 'raw_score', 'replay_score', 'last_played', 'last_played_weight', 'release_date', 'genre_metacritic', 'developer_metacritic']
+    log_cols = ['Title', 'glicko', 'raw_score', 'replay_score', 'last_played', 'last_played_weight', 'release_date',
+                'genre_metacritic', 'developer_metacritic']
 
     final_played_df = played_df.loc[:, log_cols].sort_values('raw_score', ascending=False)
     final_played_df['last_played'] = pd.to_datetime(final_played_df['last_played']).dt.date.astype(str)
