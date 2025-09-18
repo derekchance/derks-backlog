@@ -59,68 +59,6 @@ def get_metacritic_info(metacritic_url):
     return json.loads(data.decode('utf-8'))
 
 
-def fetch_opencritic_game(title, distance_threshold=0.1):
-    oc_conn = http.client.HTTPSConnection("opencritic-api.p.rapidapi.com")
-
-    oc_headers = {
-        'x-rapidapi-key': "3c8fa7e8cdmsh21fc03a2acc587ep1277bejsn309b6f765d3d",
-        'x-rapidapi-host': "opencritic-api.p.rapidapi.com"
-    }
-    game = title.replace(' ', '%20')
-
-    oc_conn.request("GET", f"/game/search?criteria={game}", headers=oc_headers)
-
-    res = oc_conn.getresponse()
-    data = res.read()
-    try:
-        game_data = json.loads(data.decode('utf-8'))[0]
-        if game_data['dist'] <= distance_threshold:
-            return game_data
-        else:
-            print(f'closet match: {game_data}')
-            print('Change distance threshold and rerun if want to keep above match')
-            return {key: np.nan for key in game_data}
-    except:
-        return {'id': np.nan, 'name': np.nan, 'dist': np.nan}
-
-
-def get_opencritic_info(oc_id):
-    oc_conn = http.client.HTTPSConnection("opencritic-api.p.rapidapi.com")
-
-    oc_headers = {
-        'x-rapidapi-key': "3c8fa7e8cdmsh21fc03a2acc587ep1277bejsn309b6f765d3d",
-        'x-rapidapi-host': "opencritic-api.p.rapidapi.com"
-    }
-
-    oc_conn.request("GET", f"/game/{oc_id}", headers=oc_headers)
-
-    res = oc_conn.getresponse()
-    data = res.read()
-    return json.loads(data.decode('utf-8'))
-
-
-def update_opencritic(title, game_idx=None, distance_threshold=0.1, dry_run=False):
-    df = pd.read_csv('game_log.csv')
-    if game_idx is None:
-        game_idx = _find_game_idx(df, title)
-
-    game_data = fetch_opencritic_game(title=title, distance_threshold=distance_threshold)
-    if ~np.isnan(game_data['id']):
-        oc_info = get_opencritic_info(oc_id=game_data['id'])
-    else:
-        oc_info = {}
-    for key in oc_info:
-        game_data[key] = oc_info[key]
-    oc_df = pd.DataFrame.from_dict(game_data, orient='index').T
-    oc_df.index = [game_idx]
-    oc_cols = oc_df.columns[oc_df.columns.isin(df.columns)]
-    df.loc[game_idx, oc_cols] = oc_df.loc[game_idx, oc_cols]
-    if dry_run:
-        df.to_csv('cache/game_log_oc_test.csv', index=False)
-    else:
-        df.to_csv('game_log.csv', index=False)
-
-
 def _get_igdb_query(title, strict=False, alt_title=None, limit=None):
     query = f'''
     search "{title}";
@@ -320,7 +258,6 @@ def update_game(
         df.loc[game_idx, 'soulslike'] = 0
     df.to_csv('game_log.csv', index=False)
     print(metacritic_url, title)
-    update_opencritic(title=title, game_idx=game_idx, distance_threshold=oc_distance_threshold, dry_run=dry_run)
     update_igdb_info(title=title, game_idx=game_idx, dry_run=dry_run)
     update_hltb(title=title, game_idx=game_idx, dry_run=dry_run, distance_threshold=hltb_distance_threshold)
     update_model_scores()

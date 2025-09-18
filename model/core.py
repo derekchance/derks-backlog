@@ -19,14 +19,6 @@ CATEGORICAL_FEATURES = [
 ]
 
 NUMERICAL_FEATURES = [
-    #opencritic
-    'percentRecommended',
-    'numReviews',
-    'numTopCriticReviews',
-    #'medianScore',
-    'topCriticScore',
-    #'percentile',
-
     #igdb
     'aggregated_rating_igdb',
     'aggregated_rating_count_igdb',
