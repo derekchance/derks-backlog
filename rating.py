@@ -1,24 +1,28 @@
 import argparse
 import pandas as pd
 import numpy as np
-
-
-def reset_ratings():
-    df = pd.read_csv('game_log.csv')
-    df['elo'] = 1000
-    df['Trials'] = 0
-    df['glicko_rd'] = 350
-    df['glicko'] = 1200
-    df.to_csv('game_log.csv', index=False)
+import sqlite3
 
 
 def trial(game_a=None, game_b=None, primary_rating='glicko'):
-    df = pd.read_csv('game_log.csv')
-    df['elo'] = df['elo'].fillna(1000)
-    df['Trials'] = df['Trials'].fillna(0)
-    df['glicko_rd'] = df['glicko_rd'].fillna(350)
-    df['glicko'] = df['glicko'].fillna(1200)
-    played_df = df.loc[df.Finished == 1].copy()
+    with sqlite3.connect('games.db') as con:
+        query = '''
+          SELECT
+              games.id,
+              games.Title,
+              last_played,
+              Trials,
+              elo,
+              glicko,
+              glicko_rd
+          FROM games
+                   LEFT JOIN last_played
+                        ON games.id = last_played.game_id
+                   LEFT JOIN ratings
+                        ON games.id = ratings.game_id
+          '''
+        df = pd.read_sql(query, con, index_col='id')
+    played_df = df.loc[df.last_played.notna()].copy()
 
     print(game_a)
     if game_a is None:
@@ -28,8 +32,8 @@ def trial(game_a=None, game_b=None, primary_rating='glicko'):
             0,
             weights
         )
-        game_a = played_df.loc[:, 'Title'].sample(n=1, weights=weights).iloc[0]
-    game_a_elo = df.loc[df.Title == game_a, primary_rating].iloc[0]
+        game_a = played_df.loc[:, 'Title'].sample(n=1, weights=weights)
+    game_a_elo = df.loc[game_a.index[0], primary_rating]
 
     if game_b is None:
         dist = (game_a_elo - played_df[primary_rating]).abs()
@@ -38,11 +42,11 @@ def trial(game_a=None, game_b=None, primary_rating='glicko'):
                            0,
                            weights,
                            )
-        game_b = played_df.loc[:, 'Title'].sample(n=1, weights=weights).iloc[0]
+        game_b = played_df.loc[:, 'Title'].sample(n=1, weights=weights)
 
 
-    print(f'1: {game_a}')
-    print(f'2: {game_b}')
+    print(f'1: {game_a['Title'].values[0]}')
+    print(f'2: {game_b['Title'].values[0]}')
     print('')
     winner = input('1 or 2?')
     if winner.lower() == '1':
@@ -55,12 +59,16 @@ def trial(game_a=None, game_b=None, primary_rating='glicko'):
         score_a = 0.5
         score_b = 0.5
 
-    df.loc[df.Title == game_a, 'Trials'] += 1
-    df.loc[df.Title == game_b, 'Trials'] += 1
+    df.loc[game_a.index[0], 'Trials'] += 1
+    df.loc[game_b.index[0], 'Trials'] += 1
 
-    df.loc[df.Title == game_a, 'Finished'] = 1
-    df.loc[df.Title == game_b, 'Finished'] = 1
-    df.to_csv('game_log.csv', index=False)
+    with sqlite3.connect('games.db') as con:
+        df.drop(columns=['last_played'])\
+          .to_sql('ratings',
+                  con,
+                  if_exists='replace',
+                  index='game_id'
+                  )
 
     elo(games=(game_a, game_b), result=(score_a, score_b))
     glicko(games=(game_a, game_b), result=(score_a, score_b))
@@ -72,8 +80,10 @@ def elo(games, result, k=32):
     game_a, game_b = games
     score_a, score_b = result
 
-    game_a_elo = df.loc[df.Title == game_a, 'elo'].iloc[0]
-    game_b_elo = df.loc[df.Title == game_b, 'elo'].iloc[0]
+    with sqlite3.connect('games.db') as con:
+        query = "SELECT elo FROM ratings WHERE game_id IN (?, ?)"
+        cur = con.execute(query, (int(game_a.index[0]), int(game_b.index[0])))
+        game_a_elo, game_b_elo = [n[0] for n in cur.fetchall()]
 
     expected_a = (1+10**((game_b_elo-game_a_elo)/400.0)) ** -1
     expected_b = (1+10**((game_a_elo-game_b_elo)/400.0)) ** -1
@@ -81,9 +91,12 @@ def elo(games, result, k=32):
     game_a_new_elo = game_a_elo + k * (score_a - expected_a)
     game_b_new_elo = game_b_elo + k * (score_b - expected_b)
 
-    df.loc[df.Title == game_a, 'elo'] = game_a_new_elo
-    df.loc[df.Title == game_b, 'elo'] = game_b_new_elo
-    df.to_csv('game_log.csv', index=False)
+    with sqlite3.connect('games.db') as con:
+        statement = "UPDATE ratings SET elo=? WHERE id=?"
+        cur = con.cursor()
+        cur.execute(statement, (game_a_new_elo, int(game_a.index[0])))
+        cur.execute(statement, (game_b_new_elo, int(game_b.index[0])))
+        con.commit()
 
     print('')
     print(f'{game_a}: {game_a_elo} -> {game_a_new_elo}')
@@ -110,21 +123,25 @@ def glicko(games, result):
     game_a, game_b = games
     score_a, score_b = result
 
-    game_a_glicko = df.loc[df.Title == game_a, 'glicko'].iloc[0]
-    game_b_glicko = df.loc[df.Title == game_b, 'glicko'].iloc[0]
+    with sqlite3.connect('games.db') as con:
+        query = "SELECT glicko FROM ratings WHERE game_id IN (?, ?)"
+        cur = con.execute(query, (int(game_a.index[0]), int(game_b.index[0])))
+        game_a_glicko, game_b_glicko = [n[0] for n in cur.fetchall()]
 
-    game_a_rd = df.loc[df.Title == game_a, 'glicko_rd'].iloc[0]
-    game_b_rd = df.loc[df.Title == game_b, 'glicko_rd'].iloc[0]
+        query = "SELECT glicko_rd FROM ratings WHERE game_id IN (?, ?)"
+        cur = con.execute(query, (int(game_a.index[0]), int(game_b.index[0])))
+        game_a_rd, game_b_rd = [n[0] for n in cur.fetchall()]
 
     a_glicko, a_rd = _glicko((game_a_glicko, game_b_glicko), (game_a_rd, game_b_rd), score_a)
     b_glicko, b_rd = _glicko((game_b_glicko, game_a_glicko), (game_b_rd, game_a_rd), score_b)
 
-    df.loc[df.Title == game_a, 'glicko'] = a_glicko
-    df.loc[df.Title == game_b, 'glicko'] = b_glicko
-    df.loc[df.Title == game_a, 'glicko_rd'] = a_rd
-    df.loc[df.Title == game_b, 'glicko_rd'] = b_rd
+    with sqlite3.connect('games.db') as con:
+        statement = "UPDATE ratings SET glicko=?, glicko_rd=? WHERE id=?"
+        cur = con.cursor()
+        cur.execute(statement, (a_glicko, a_rd, int(game_a.index[0])))
+        cur.execute(statement, (b_glicko, b_rd, int(game_b.index[0])))
+        con.commit()
 
-    df.to_csv('game_log.csv', index=False)
 
     print('')
     print(f'{game_a}: {game_a_glicko} ({game_a_rd}) -> {a_glicko} ({a_rd})')
@@ -137,25 +154,6 @@ def trials(game=None, n=1):
     while count < n:
         trial(game_a=game, game_b=None)
         count += 1
-
-
-def tournament(n):
-    competitors = 2**n_trials
-    df = pd.read_csv('game_log.csv')
-    played_df = df.loc[df.Finished == 1].copy()
-
-    competitors = played_df.loc[:, 'Title'].sample(n=competitors).tolist()
-
-    for n in range(n_trials):
-        winners = []
-        comp_df = df.loc[df.Title.isin(competitors), ['Title', 'elo', 'glicko']].T
-        while comp_df.shape[1] > 1:
-            low, high = comp_df.loc['glicko'].idxmin(), comp_df.loc['glicko'].idxmax()
-            low_game = comp_df.pop(low).Title
-            high_game = comp_df.pop(high).Title
-            winner = trial(game_a=low_game, game_b=high_game)
-            winners.append(winner)
-        competitors = winners
 
 
 if __name__ == '__main__':
