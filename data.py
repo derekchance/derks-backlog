@@ -1,6 +1,6 @@
 import http.client
 import json
-from datetime import date
+import sqlite3
 
 from fuzzywuzzy import fuzz
 import joblib
@@ -37,11 +37,16 @@ def safe_loads(x):
         return {}
 
 
-def _find_game_idx(df, title):
+def _find_game_idx(title):
     try:
-        return df.index[df.Title.str.lower() == title.lower()][0]
-    except:
-        raise('Could not find game. No index provided.')
+        with sqlite3.connect('games.db') as con:
+            cur = con.cursor()
+            cur.execute(f"SELECT id FROM games WHERE Title Like ?", (title,))
+            game_idx = cur.fetchone()[0]
+            assert isinstance(game_idx, int)
+            return game_idx
+    except AssertionError:
+        raise('Game Title Not Found')
 
 
 def get_metacritic_info(metacritic_url):
@@ -114,54 +119,76 @@ def get_igdb_info(title):
         return matched_response
 
 
-def update_igdb_info(title, game_idx=None, dry_run=False):
-    df = pd.read_csv('game_log.csv')
+def update_igdb_info(title, game_idx=None):
     if game_idx is None:
-        game_idx = _find_game_idx(df, title)
+        game_idx = _find_game_idx(title)
     try:
         igdb_results = get_igdb_info(title)
     except(ValueError):
         print('igdb lookup failed')
         igdb_results = {'id': np.nan}
-    igdb_df = pd.DataFrame.from_dict(igdb_results, orient='index').T
-    igdb_df.index = [game_idx]
-    igdb_df.rename(columns=lambda x: f'{x}_igdb', inplace=True)
-    igdb_cols = igdb_df.columns[igdb_df.columns.isin(df.columns)]
-    df.loc[game_idx, igdb_cols] = igdb_df.loc[game_idx, igdb_cols]
-    if dry_run:
-        df.to_csv('cache/game_log_igdb_test.csv', index=False)
-    else:
-        df.to_csv('game_log.csv', index=False)
+
+    for i, j in igdb_results.items():
+        if isinstance(j, list):
+            igdb_results[i] = str(j)
+    igdb_results['game_id'] = game_idx
+    with sqlite3.connect('games.db') as con:
+        statement = '''
+                    INSERT INTO igdb (id, age_ratings, aggregated_rating, aggregated_rating_count, first_release_date, \
+                                      game_modes, genres, hypes, involved_companies, keywords, name, rating, \
+                                      rating_count, similar_games, themes, game_id, dlu)
+                    VALUES (:id, :age_ratings, :aggregated_rating, :aggregated_rating_count, :first_release_date, \
+                            :game_modes, :genres, :hypes, :involved_companies, :keywords, :name, :rating, :rating_count, \
+                            :similar_games, :themes, :game_id, CURRENT_TIMESTAMP)
+                    ON CONFLICT(game_id) DO UPDATE SET id=:id, \
+                                                       age_ratings=:age_ratings, \
+                                                       aggregated_rating=:aggregated_rating, \
+                                                       aggregated_rating_count=:aggregated_rating_count, \
+                                                       first_release_date=:first_release_date, \
+                                                       game_modes=:game_modes, \
+                                                       genres=:genres, \
+                                                       hypes=:hypes, \
+                                                       involved_companies=:involved_companies, \
+                                                       keywords=:keywords, \
+                                                       name=:name, \
+                                                       rating=:rating, \
+                                                       rating_count=:rating_count, \
+                                                       similar_games=:similar_games, \
+                                                       themes=:themes, \
+                                                       dlu=CURRENT_TIMESTAMP
+                    WHERE game_id = :game_id \
+                    '''
+        cur = con.cursor()
+        cur.executemany(statement, (igdb_results,))
 
 
-def update_metacritic(metacritic_url, title=None, dry_run=False):
-    df = pd.read_csv('game_log.csv')
-    game_df = df.loc[df.metacritic_url == metacritic_url]
-    if len(game_df) == 0:
-        game_idx = df.index.max() + 1
-        df.loc[game_idx, 'metacritic_url'] = metacritic_url
-        if title is None:
-            title = metacritic_url.split('/')[-2].replace('-', ' ').title()
-        df.loc[game_idx, 'Title'] = title
-    else:
-        if len(game_df) > 1:
-            print('Duplicate Entries Present.')
-        game_idx = game_df.index[0]
-        if title is None:
-            title = df.loc[game_idx, 'Title']
-        else:
-            df.loc[game_idx, 'Title'] = title
+
+def update_metacritic(metacritic_url, game_idx=None, title=None):
+    if game_idx is None:
+        game_idx = _find_game_idx(title)
     metacritic_result = get_metacritic_info(metacritic_url=metacritic_url)
-    metacritic_df = pd.DataFrame.from_dict(metacritic_result, orient='index').T
-    metacritic_df.index = [game_idx]
-    metacritic_df.rename(columns=lambda x: f'{x}_metacritic', inplace=True)
-    metacritic_cols = metacritic_df.columns[metacritic_df.columns.isin(df.columns)]
-    df.loc[game_idx, metacritic_cols] = metacritic_df.loc[game_idx, metacritic_cols]
-    if dry_run:
-        df.to_csv('cache/game_log_mc_test.csv', index=False)
-    else:
-        df.to_csv('game_log.csv', index=False)
-    return game_idx, title
+    metacritic_result['game_id'] = game_idx
+    with sqlite3.connect('games.db') as con:
+        statement = '''
+                    INSERT INTO metacritic (game_id, genre, releaseDate, developer, userScore, metaScore, url, platform,
+                                            description, dlu)
+                    VALUES (:game_id, :genre, :releaseDate, :developer, :userScore, :metaScore, :url, :platform,
+                            :description, CURRENT_TIMESTAMP)
+                    ON CONFLICT(game_id) DO UPDATE SET genre=:genre, 
+                                                       releaseDate=:releaseDate, 
+                                                       developer=:developer, 
+                                                       userScore=:userScore,
+                                                       metaScore=:metaScore,
+                                                       url=:url,
+                                                       platform=:platform,
+                                                       description=:description,
+                                                       dlu=CURRENT_TIMESTAMP
+                        
+                    WHERE game_id = :game_id 
+                    '''
+        cur = con.cursor()
+        cur.executemany(statement, (metacritic_result,))
+
 
 
 def fetch_hltb(title, hltb_id=None, distance_threshold=0.15):
@@ -217,72 +244,140 @@ def fetch_hltb(title, hltb_id=None, distance_threshold=0.15):
     return result
 
 
-def update_hltb(title, game_idx=None, hltb_id=None, distance_threshold=0.15, dry_run=False):
-    df = pd.read_csv('game_log.csv')
+def update_hltb(title, game_idx=None, hltb_id=None, distance_threshold=0.15):
     if game_idx is None:
-        game_idx = _find_game_idx(df, title)
+        game_idx = _find_game_idx(title=title)
 
     game_data = fetch_hltb(title=title, hltb_id=hltb_id, distance_threshold=distance_threshold)
-    hltb_df = pd.DataFrame(index=[int(game_idx)], data=game_data)
-    hltb_df.rename(columns=lambda x: f'{x}_hltb', inplace=True)
-    df.loc[int(game_idx), hltb_df.columns] = hltb_df.loc[int(game_idx), hltb_df.columns]
+    game_data['hltb_id'] = game_data['game_id']
+    game_data['game_id'] = game_data[game_idx]
+    with sqlite3.connect('games.db') as con:
+        statement = '''
+                    INSERT INTO hltb (game_id, hltb_id, game_name, game_name_date, game_alias, game_type, game_image,
+                                      comp_lvl_combine, comp_lvl_sp, comp_lvl_co, comp_lvl_mp, comp_main, comp_plus,
+                                      comp_100, comp_all, comp_main_count, comp_plus_count, comp_100_count,
+                                      comp_all_count, invested_co, invested_mp, invested_co_count, invested_mp_count,
+                                      count_comp, count_speedrun, count_backlog, count_review, review_score,
+                                      count_playing, count_retired, profile_platform, profile_popular, release_world, dlu)
+                    VALUES (:game_id, :hltb_id, :game_name, :game_name_date, :game_alias, :game_type, :game_image,
+                            :comp_lvl_combine, :comp_lvl_sp, :comp_lvl_co, :comp_lvl_mp, :comp_main, :comp_plus,
+                            :comp_100, :comp_all, :comp_main_count, :comp_plus_count, :comp_100_count, :comp_all_count,
+                            :invested_co, :invested_mp, :invested_co_count, :invested_mp_count, :count_comp,
+                            :count_speedrun, :count_backlog, :count_review, :review_score, :count_playing,
+                            :count_retired, :profile_platform, :profile_popular, :release_world, CURRENT_TIMESTAMP)
+                    ON CONFLICT(game_id) DO UPDATE SET hltb_id=:hltb_id,
+                                                       game_name=:game_name,
+                                                       game_name_date=:game_name_date,
+                                                       game_alias=:game_alias,
+                                                       game_type=:game_type,
+                                                       game_image=:game_image,
+                                                       comp_lvl_combine=:comp_lvl_combine,
+                                                       comp_lvl_sp=:comp_lvl_sp,
+                                                       comp_lvl_co=:comp_lvl_co,
+                                                       comp_lvl_mp=:comp_lvl_mp,
+                                                       comp_main=:comp_main,
+                                                       comp_plus=:comp_plus,
+                                                       comp_100=:comp_100,
+                                                       comp_all=:comp_all,
+                                                       comp_main_count=:comp_main_count,
+                                                       comp_plus_count=:comp_plus_count,
+                                                       comp_100_count=:comp_100_count,
+                                                       comp_all_count=:comp_all_count,
+                                                       invested_co=:invested_co,
+                                                       invested_mp=:invested_mp,
+                                                       invested_co_count=:invested_co_count,
+                                                       invested_mp_count=:invested_mp_count,
+                                                       count_comp=:count_comp,
+                                                       count_speedrun=:count_speedrun,
+                                                       count_backlog=:count_backlog,
+                                                       count_review=:count_review,
+                                                       review_score=:review_score,
+                                                       count_playing=:count_playing,
+                                                       count_retired=:count_retired,
+                                                       profile_platform=:profile_platform,
+                                                       profile_popular=:profile_popular,
+                                                       release_world=:release_world,
+                                                       dlu=CURRENT_TIMESTAMP
 
-    if dry_run:
-        df.to_csv('cache/game_log_hltb_test.csv', index=False)
-    else:
-        df.to_csv('game_log.csv', index=False)
+                    WHERE game_id = :game_id \
+                    '''
+        cur = con.cursor()
+        cur.executemany(statement, (game_data,))
 
 
-def update_game(
-        metacritic_url=None, title=None, oc_distance_threshold=0.1, hltb_distance_threshold=0.15,
-        dry_run=False, classic=False, soulslike=False, rating=None):
-    df = pd.read_csv('game_log.csv')
-    print(metacritic_url, title)
+def update_game(title, metacritic_url=None, hltb_distance_threshold=0.15,
+        dry_run=False, classic=False, soulslike=False):
+    try:
+        game_idx = _find_game_idx(title=title)
+    except AssertionError:
+        with sqlite3.connect('games.db') as con:
+            statement = 'INSERT INTO games (Title) VALUES (?)'
+            cur = con.cursor()
+            cur.execute(statement, (title, ))
+
+        game_idx = _find_game_idx(title=title)
+
     if metacritic_url is None:
-        try:
-            metacritic_url = df.set_index('Title').loc[title, 'metacritic_url']
-            df.to_csv('game_log.csv', index=False)
-        except:
-            raise(Exception('No Metacritic URL and Title not found'))
+        with sqlite3.connect('games.db') as con:
+            cur = con.cursor()
+            cur.execute('SELECT url FROM metacritic WHERE game_id = ?', (game_idx,))
+            try:
+                metacritic_url = cur.fetchone()[0]
+                assert isinstance(metacritic_url, str)
+            except (TypeError, AssertionError):
+                raise 'Metacritic URL not found. Include URL as keyword argument.'
 
-    game_idx, title = update_metacritic(metacritic_url=metacritic_url, title=title, dry_run=dry_run)
-    df = pd.read_csv('game_log.csv')
-    df['Finished'] = df['Finished'].fillna(0.)
+    update_metacritic(metacritic_url=metacritic_url, title=title, game_idx=game_idx)
+
+
     if classic:
-        df.loc[game_idx, 'Classic'] = 1
-    else:
-        df.loc[game_idx, 'Classic'] = 0
+        with sqlite3.connect('games.db') as con:
+            statement = 'INSERT INTO classics (game_id, Title) VALUES (?, ?) ON CONFLICT (game_id) DO NOTHING'
+            cur = con.cursor()
+            cur.execute(statement, (title,))
+
     if soulslike:
-        df.loc[game_idx, 'soulslike'] = 1
-    else:
-        df.loc[game_idx, 'soulslike'] = 0
-    df.to_csv('game_log.csv', index=False)
+        with sqlite3.connect('games.db') as con:
+            statement = 'INSERT INTO soulslikes (game_id, Title) VALUES (?, ?) ON CONFLICT (game_id) DO NOTHING'
+            cur = con.cursor()
+            cur.execute(statement, (title,))
+
     print(metacritic_url, title)
-    update_igdb_info(title=title, game_idx=game_idx, dry_run=dry_run)
-    update_hltb(title=title, game_idx=game_idx, dry_run=dry_run, distance_threshold=hltb_distance_threshold)
+    update_igdb_info(title=title, game_idx=game_idx)
+    update_hltb(title=title, game_idx=game_idx, distance_threshold=hltb_distance_threshold)
     update_model_scores()
+
+
+
+def mark_played(game_id=None, title=None):
     df = pd.read_csv('game_log.csv')
-    return df.loc[game_idx, ['Title', 'glicko', 'raw_score', 'model_score']]
+    assert (game_id is not None) | (title is not None), 'Must provide either game_id or title'
+    if game_id is None:
+        game_id = _find_game_idx(title=title)
+
+    with sqlite3.connect('games.db') as con:
+        statement = '''
+            INSERT INTO last_played (game_id, last_played) VALUES (?, CURRENT_TIMESTAMP)
+            ON CONFLICT (game_id) DO UPDATE SET last_played=CURRENT_TIMESTAMP WHERE game_id=?
+                    '''
+        cur = con.cursor()
+        cur.executemany(statement, (game_id,))
 
 
-def mark_played(title, played=None, dropped=False):
+def mark_dropped(game_id=None, title=None):
     df = pd.read_csv('game_log.csv')
-    game_idx = _find_game_idx(df, title)
+    assert (game_id is not None) | (title is not None), 'Must provide either game_id or title'
+    if game_id is None:
+        game_id = _find_game_idx(title=title)
 
-    if played is None:
-        from datetime import date
-        played = date.today().isoformat()
-    else:
-        # functional duck type to ensure passed value is a date
-        played = pd.to_datetime(played).date().isoformat()
+    with sqlite3.connect('games.db') as con:
+        statement = '''
+            INSERT INTO dropped (game_id) VALUES (?)
+            ON CONFLICT (game_id) DO NOTHING
+                    '''
+        cur = con.cursor()
+        cur.executemany(statement, (game_id,))
 
-    df.loc[game_idx, 'played'] = 1
-    df.loc[game_idx, 'Finished'] = 1
-    df.loc[game_idx, 'last_played'] = played
-    if dropped:
-        df.loc[game_idx, 'dropped'] = 1
-        df.loc[game_idx, 'glicko'] = 900
-    df.to_csv('game_log.csv', index=False)
 
 
 def update_model_scores(model='stacking'):
@@ -302,12 +397,6 @@ def update_model_scores(model='stacking'):
 
     backlog_df['model_score'] = backlog_df['raw_score'].copy()
     backlog_df['model_score'] = adjust_sequels(backlog_df)
-
-    #grid_search = GridSearchCV(
-    #    GaussianMixture(), param_grid=param_grid, scoring=gmm_bic_score
-    #)
-    #grid_search.fit(backlog_df['model_score'].to_frame())
-    #backlog_df['tier'] = grid_search.predict(backlog_df['model_score'].to_frame())
 
     final_backlog_df = backlog_df.loc[:,
         ['Title', 'model_score', 'raw_score', 'time_est', 'release_date', 'genre_metacritic', 'developer_metacritic']
