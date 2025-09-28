@@ -167,8 +167,9 @@ def load_dataset(game_ids='all'):
     with sqlite3.connect('games.db') as con:
         with open('input.sql') as f:
             query = f.read().format(game_ids=game_ids)
+            df = pd.read_sql(query, con, dtype={'rating': float, 'rating_count': float})
 
-        return pd.read_sql(query, con)
+    return df
 
 
 def load_Xy():

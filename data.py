@@ -134,6 +134,11 @@ def update_igdb_info(title, game_idx=None):
         if isinstance(j, list):
             igdb_results[i] = str(j)
     igdb_results['game_id'] = game_idx
+
+    for i in ['id', 'age_ratings', 'aggregated_rating', 'aggregated_rating_count', 'first_release_date', 'game_modes',
+              'genres', 'hypes', 'involved_companies', 'keywords', 'name', 'rating', 'rating_count', 'similar_games',
+              'themes']:
+        igdb_results[i] = igdb_results.get(i, np.nan)
     with sqlite3.connect('games.db') as con:
         statement = '''
                     INSERT INTO igdb (id, age_ratings, aggregated_rating, aggregated_rating_count, first_release_date, \
