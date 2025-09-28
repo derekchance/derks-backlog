@@ -43,11 +43,12 @@ def _find_game_idx(title):
         with sqlite3.connect('games.db') as con:
             cur = con.cursor()
             cur.execute(f"SELECT id FROM games WHERE Title Like ?", (title,))
-            game_idx = cur.fetchone()[0]
-            assert isinstance(game_idx, int)
-            return game_idx
-    except AssertionError:
-        raise('Game Title Not Found')
+            game_idx = cur.fetchone()
+            assert game_idx is not None
+            return game_idx[0]
+    except AssertionError as e:
+        raise KeyError('Title Not Found')
+
 
 
 def get_metacritic_info(metacritic_url):
@@ -125,7 +126,7 @@ def update_igdb_info(title, game_idx=None):
         game_idx = _find_game_idx(title)
     try:
         igdb_results = get_igdb_info(title)
-    except(ValueError):
+    except ValueError:
         print('igdb lookup failed')
         igdb_results = {'id': np.nan}
 
@@ -169,6 +170,7 @@ def update_metacritic(metacritic_url, game_idx=None, title=None):
         game_idx = _find_game_idx(title)
     metacritic_result = get_metacritic_info(metacritic_url=metacritic_url)
     metacritic_result['game_id'] = game_idx
+    metacritic_result['url'] = metacritic_url
     with sqlite3.connect('games.db') as con:
         statement = '''
                     INSERT INTO metacritic (game_id, genre, releaseDate, developer, userScore, metaScore, url, platform,
@@ -251,7 +253,7 @@ def update_hltb(title, game_idx=None, hltb_id=None, distance_threshold=0.15):
 
     game_data = fetch_hltb(title=title, hltb_id=hltb_id, distance_threshold=distance_threshold)
     game_data['hltb_id'] = game_data['game_id']
-    game_data['game_id'] = game_data[game_idx]
+    game_data['game_id'] = game_idx
     with sqlite3.connect('games.db') as con:
         statement = '''
                     INSERT INTO hltb (game_id, hltb_id, game_name, game_name_date, game_alias, game_type, game_image,
@@ -309,7 +311,7 @@ def update_hltb(title, game_idx=None, hltb_id=None, distance_threshold=0.15):
 def update_game(title, metacritic_url=None, hltb_distance_threshold=0.15, classic=False, soulslike=False):
     try:
         game_idx = _find_game_idx(title=title)
-    except AssertionError:
+    except KeyError:
         with sqlite3.connect('games.db') as con:
             statement = 'INSERT INTO games (Title) VALUES (?)'
             cur = con.cursor()
