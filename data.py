@@ -1,6 +1,7 @@
 import http.client
 import json
 import sqlite3
+import warnings
 
 from fuzzywuzzy import fuzz
 import joblib
@@ -305,8 +306,7 @@ def update_hltb(title, game_idx=None, hltb_id=None, distance_threshold=0.15):
         cur.executemany(statement, (game_data,))
 
 
-def update_game(title, metacritic_url=None, hltb_distance_threshold=0.15,
-        dry_run=False, classic=False, soulslike=False):
+def update_game(title, metacritic_url=None, hltb_distance_threshold=0.15, classic=False, soulslike=False):
     try:
         game_idx = _find_game_idx(title=title)
     except AssertionError:
@@ -345,7 +345,7 @@ def update_game(title, metacritic_url=None, hltb_distance_threshold=0.15,
     print(metacritic_url, title)
     update_igdb_info(title=title, game_idx=game_idx)
     update_hltb(title=title, game_idx=game_idx, distance_threshold=hltb_distance_threshold)
-    update_model_scores()
+    update_model_scores(game_id=game_idx)
 
 
 
@@ -361,7 +361,7 @@ def mark_played(game_id=None, title=None):
             ON CONFLICT (game_id) DO UPDATE SET last_played=CURRENT_TIMESTAMP WHERE game_id=?
                     '''
         cur = con.cursor()
-        cur.executemany(statement, (game_id,))
+        cur.executemany(statement, (game_id, game_id, ))
 
 
 def mark_dropped(game_id=None, title=None):
@@ -378,9 +378,36 @@ def mark_dropped(game_id=None, title=None):
         cur = con.cursor()
         cur.executemany(statement, (game_id,))
 
+def update_model_scores(game_id='all'):
+    model_input = load_dataset(game_ids=game_id)
+    model = joblib.load(MODEL_DIR / f'models/xgb_model.joblib')
+    with warnings.catch_warnings(action='ignore'):
+        raw_scores = model.predict(model_input)
+    if game_id == 'all':
+        rs_df = pd.Series(index=model_input['id'], data=raw_scores, name='raw_score').to_frame()
+        with sqlite3.connect('games.db') as con:
+            cur = con.cursor()
+            cur.execute('DROP TABLE model_scores')
+            cur.execute('CREATE TABLE model_scores(game_id INTEGER PRIMARY KEY, raw_score REAL)')
+            rs_df.to_sql('model_scores', con, if_exists='append', index='game_id')
+    elif isinstance(game_id, int):
+        with sqlite3.connect('games.db') as con:
+            statement = '''
+                        INSERT INTO model_scores (game_id, raw_score) VALUES (:game_id, :raw_score)
+                        ON CONFLICT (game_id) DO UPDATE SET raw_score=:raw_score WHERE game_id=:game_id
+                        '''
+            model_data=(
+                {'game_id': int(game_id), 'raw_score': float(raw_scores[0])},
+            )
+            #return model_data
+            cur = con.cursor()
+            cur.executemany(statement, model_data)
+    else:
+        raise('Valid inputs are "all" or the game_id (game.id)')
 
 
-def update_model_scores(model='stacking'):
+
+def update_model_scores_og(model='stacking'):
     df = pd.read_csv(MODEL_DIR.parent / 'game_log.csv')
     original_columns = set(df.columns.to_list())
     test_df = load_dataset()

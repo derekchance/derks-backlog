@@ -17,12 +17,11 @@ from .core import (
     CategoricalEncoder,
     SummarizeSimilar,
     LIST_FEATURES,
-    NUMERICAL_FEATURES,
+    NUMERICAL_MEANED_FEATURES,
+    NUMERICAL_ZEROED_FEATURES,
     CATEGORICAL_FEATURES,
-    DICT_FEATURES,
     MODEL_DIR,
     load_Xy,
-    SIMILAR_FEATURES,
 )
 
 
@@ -33,14 +32,10 @@ SEARCH_CV_SPLIT = 5
 N_BEST = 1
 
 # categorize features by preprocessing
-numerical_features = NUMERICAL_FEATURES.copy()
+numerical_meaned_features = NUMERICAL_MEANED_FEATURES.copy()
+numerical_zeroed_features = NUMERICAL_ZEROED_FEATURES.copy()
 categorical_features = CATEGORICAL_FEATURES.copy()
-dict_features = DICT_FEATURES.copy()
 list_features = LIST_FEATURES.copy()
-similar_features = SIMILAR_FEATURES.copy()
-
-dict_features.remove('Genres')
-list_features.remove('genre_mc_clean')
 
 
 SEARCH_PARAMS = {
@@ -56,11 +51,7 @@ SEARCH_PARAMS = {
 # define preprocessors
 list_transformers = []
 for n in list_features:
-    list_transformers.append((n, PandasCountVectorizer(input='content'), n))
-
-dict_transformers = []
-for n in dict_features:
-    dict_transformers.append((n, PandasDictVectorizer(sparse=False), n))
+    list_transformers.append((n, PandasCountVectorizer(input='content', lowercase=False, token_pattern=r'^[0-9]*'), n))
 
 categorical_transformer = Pipeline([
     ('encode', CategoricalEncoder(handle_unknown='use_encoded_value', unknown_value=np.nan)),
@@ -68,13 +59,12 @@ categorical_transformer = Pipeline([
 
 nonlist_transformers = [
     ('categorical', categorical_transformer, categorical_features),
-    ('numerical', StandardScaler(), numerical_features),
-    ('similar', SummarizeSimilar(), similar_features),
+    ('numerical', 'passthrough', numerical_meaned_features+numerical_zeroed_features),
 ]
 
 
 column_transformer = ColumnTransformer(
-    transformers=nonlist_transformers+list_transformers+dict_transformers,
+    transformers=nonlist_transformers+list_transformers,
     sparse_threshold=0
 )
 

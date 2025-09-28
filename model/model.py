@@ -10,12 +10,8 @@ from .core import load_dataset
 from .core import MODEL_DIR
 from .core import TARGET
 from .core import richard_curve
-from .rbf import main as rbf
-from .ridge import main as ridge
 from .xgb import main as xgb
-from .linear_svr import main as linear_svr
-from .elasticnet import main as elasticnet
-from .stacking import main as stacking
+
 
 
 param_grid = {
@@ -113,16 +109,16 @@ def update_model_scores(model='stacking'):
 
 def update_models():
     print('Updating models')
-    print('SVR (radial basis)...')
-    rbf()
-    print('SVR (linear)...')
-    linear_svr()
-    print('Ridge...')
-    ridge()
-    print('ElasticNet...')
-    elasticnet()
+    #print('SVR (radial basis)...')
+    #rbf()
+    #print('SVR (linear)...')
+    #linear_svr()
+    #print('Ridge...')
+    #ridge()
+    #print('ElasticNet...')
+    #elasticnet()
     print('XGB...')
     xgb()
-    print('Stacking Models (like legos)')
-    stacking()
+    #print('Stacking Models (like legos)')
+    #stacking()
     print('Done.')

@@ -1,6 +1,7 @@
 from pathlib import Path
 from datetime import date
 import json
+import sqlite3
 
 import numpy as np
 import pandas as pd
@@ -11,38 +12,43 @@ from sklearn.feature_extraction import DictVectorizer
 
 MODEL_DIR = Path(__file__).parent
 CATEGORICAL_FEATURES = [
-    #'tier',
-    'genre_metacritic',
-    'developer_metacritic',
-    #'platform_metacritic',
-    #'franchise_igdb',
+    'genre',
+    'category',
+    'franchise',
+    'game_type',
 ]
 
-NUMERICAL_FEATURES = [
-    #igdb
-    'aggregated_rating_igdb',
-    'aggregated_rating_count_igdb',
-    'rating_igdb',
-    'rating_count_igdb',
-    'age_comb',
-
+NUMERICAL_MEANED_FEATURES = [
     #metacritic
-    'metaScore_metacritic',
-    'userScore_metacritic',
+    'userScore',
+    'metaScore',
+
+    #igdb
+    'rating',
+    'aggregated_rating',
 
     #HowLongToBeeat
-    #'count_review_hltb',
-    #'count_retired_hltb',
-    'count_comp_hltb',
-    'review_score_hltb',
-    'retire_rate_hltb',
+    'retire_rate',
+    'comp_main_rate',
+    'comp_plus_rate',
+    'comp_100_rate',
+    'comp_all_rate',
+    'review_rate',
+    'speedrun_rate',
+    'review_score',
+]
 
-    #Recs Features
+NUMERICAL_ZEROED_FEATURES = [
+    'rating_count',
+    'aggregated_rating_count',
+    'count_comp',
+    'count_review',
+    'count_speedrun',
+
+    # Recs Features
     'AM',
     'BR',
-    'Brandon',
     'Buried Treasure',
-    'EC',
     'Jackie',
     'Nick',
     'Fabio',
@@ -50,35 +56,26 @@ NUMERICAL_FEATURES = [
     'Sterling',
     'Yahtzee',
     'hbomberguy',
-    'Tyler',
     'fightincowboy',
 
     # Self-Engineered Features
-    'Classic',
+    'classic',
     'soulslike',
 ]
 
-DICT_FEATURES = [
-    #'Companies',
-    'Genres',
-]
-
 LIST_FEATURES = [
-    'genre_mc_clean',
-    #'game_engines_igdb',
-    'genres_igdb',
-    #'keywords_igdb',
-    #'similar_games_igdb',
-    #'involved_companies_igdb',
-    'themes_igdb',
-    #'platform_hltb_clean',
+    'game_engines',
+    'genres',
+    'themes',
+    'keywords',
+    'game_modes',
+    'involved_companies',
+    'similar_games',
 ]
-
-SIMILAR_FEATURES = ['id_igdb', 'similar_games_igdb', 'Finished', 'glicko']
 
 TARGET = 'glicko'
 
-FEATURES = CATEGORICAL_FEATURES + NUMERICAL_FEATURES + DICT_FEATURES + LIST_FEATURES + SIMILAR_FEATURES
+FEATURES = CATEGORICAL_FEATURES + NUMERICAL_MEANED_FEATURES + NUMERICAL_ZEROED_FEATURES + LIST_FEATURES
 
 
 class CategoricalEncoder(OrdinalEncoder):
@@ -161,41 +158,24 @@ def _safe_loads(x):
         return {}
 
 
-def _prepare_dataframe(df):
-    # load recommendations and append to dataset
-    rec_df = pd.read_csv('rec_log.csv')
-    rec_df = rec_df.groupby('Title').Recommender.value_counts().unstack(level=1).fillna(0)
-    df = df.merge(rec_df, how='left', left_on='Title', right_index=True)
-    df['release_calendar_date_igdb'] = pd.to_datetime(df.first_release_date_igdb, unit='s')
-    df['release_date'] = df.release_calendar_date_igdb.fillna(df.releaseDate_metacritic)
-    df['age'] = (pd.to_datetime(date.today()) - df['release_date']).dt.days
-    df['Companies'] = df['Companies'].apply(_safe_loads)
-    df['Genres'] = df['Genres'].apply(_safe_loads)
-    df['genre_mc_clean'] = df.loc[:, 'genre_metacritic'].fillna('').str.replace("-","")
-    df['platform_hltb_clean'] = df['profile_platform_hltb'].astype(str).str.split(', ').astype(str)
-    df['retire_rate_hltb'] = df['count_retired_hltb'] / df['count_comp_hltb']
-    df['retire_rate_hltb'] = df['retire_rate_hltb'].where(df['count_comp_hltb'] > 5)
-    df['review_score_hltb'] = df['review_score_hltb'].where(df['count_review_hltb'] > 5)
-    df['age_hltb'] = (2025 - df['release_world_hltb']) * 365
-    df['age_comb'] = df['age'].fillna(df['age_hltb'])
-    df.loc[:, 'AM':] = df.loc[:, 'AM':].fillna(0.)
-    df.loc[:, LIST_FEATURES] = df.loc[:, LIST_FEATURES].fillna('[]')
-    return df
+def load_dataset(game_ids='all'):
+    if game_ids == 'all':
+        game_ids = '(SELECT id FROM games)'
+    elif isinstance(game_ids, int):
+        game_ids = f'({game_ids})'
 
+    with sqlite3.connect('games.db') as con:
+        with open('input.sql') as f:
+            query = f.read().format(game_ids=game_ids)
 
-def load_dataset():
-    df = pd.read_csv('game_log.csv')
-    df = _prepare_dataframe(df)
-
-    return df.loc[:, FEATURES]
+        return pd.read_sql(query, con)
 
 
 def load_Xy():
-    df = pd.read_csv('game_log.csv')
-    df = _prepare_dataframe(df)
+    df = load_dataset()
 
-    X = df.loc[df.Finished == 1, FEATURES]
-    y = df.loc[df.Finished == 1, TARGET]
+    X = df.loc[df.glicko.notna(), FEATURES].copy()
+    y = df.loc[df.glicko.notna(), TARGET].values
     return X, y
 
 
