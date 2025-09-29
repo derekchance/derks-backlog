@@ -24,7 +24,6 @@ def trial(game_a=None, game_b=None, primary_rating='glicko'):
         df = pd.read_sql(query, con, index_col='id')
     played_df = df.loc[df.last_played.notna()].copy()
 
-    print(game_a)
     if game_a is None:
         weights = (1 + played_df['Trials'].max() - played_df['Trials']) ** 2
         weights = np.where(
@@ -32,21 +31,25 @@ def trial(game_a=None, game_b=None, primary_rating='glicko'):
             0,
             weights
         )
-        game_a = played_df.loc[:, 'Title'].sample(n=1, weights=weights)
+        game_a = played_df.sample(n=1, weights=weights)
+    else:
+        game_a = played_df.loc[played_df.Title == game_a]
     game_a_elo = df.loc[game_a.index[0], primary_rating]
 
     if game_b is None:
         dist = (game_a_elo - played_df[primary_rating]).abs()
         weights = 1/(dist + 1)**3
-        weights = np.where(played_df.Title == game_a,
+        weights = np.where(played_df.Title == game_a['Title'].iloc[0],
                            0,
                            weights,
                            )
-        game_b = played_df.loc[:, 'Title'].sample(n=1, weights=weights)
+        game_b = played_df.sample(n=1, weights=weights)
+    else:
+        game_b = played_df.loc[played_df.Title == game_b]
 
 
-    print(f'1: {game_a['Title'].values[0]}')
-    print(f'2: {game_b['Title'].values[0]}')
+    print(f'1: {game_a['Title'].iloc[0]}')
+    print(f'2: {game_b['Title'].iloc[0]}')
     print('')
     winner = input('1 or 2?')
     if winner.lower() == '1':
@@ -92,15 +95,15 @@ def elo(games, result, k=32):
     game_b_new_elo = game_b_elo + k * (score_b - expected_b)
 
     with sqlite3.connect('games.db') as con:
-        statement = "UPDATE ratings SET elo=? WHERE id=?"
+        statement = "UPDATE ratings SET elo=? WHERE game_id=?"
         cur = con.cursor()
         cur.execute(statement, (game_a_new_elo, int(game_a.index[0])))
         cur.execute(statement, (game_b_new_elo, int(game_b.index[0])))
         con.commit()
 
     print('')
-    print(f'{game_a}: {game_a_elo} -> {game_a_new_elo}')
-    print(f'{game_b}: {game_b_elo} -> {game_b_new_elo}')
+    print(f'{game_a['Title'].iloc[0]}: {game_a_elo} -> {game_a_new_elo}')
+    print(f'{game_b['Title'].iloc[0]}: {game_b_elo} -> {game_b_new_elo}')
 
 
 def _glicko(ratings, rds, s_i):
@@ -119,7 +122,6 @@ def _glicko(ratings, rds, s_i):
 
 
 def glicko(games, result):
-    df = pd.read_csv('game_log.csv')
     game_a, game_b = games
     score_a, score_b = result
 
@@ -136,7 +138,7 @@ def glicko(games, result):
     b_glicko, b_rd = _glicko((game_b_glicko, game_a_glicko), (game_b_rd, game_a_rd), score_b)
 
     with sqlite3.connect('games.db') as con:
-        statement = "UPDATE ratings SET glicko=?, glicko_rd=? WHERE id=?"
+        statement = "UPDATE ratings SET glicko=?, glicko_rd=? WHERE game_id=?"
         cur = con.cursor()
         cur.execute(statement, (a_glicko, a_rd, int(game_a.index[0])))
         cur.execute(statement, (b_glicko, b_rd, int(game_b.index[0])))
@@ -144,8 +146,8 @@ def glicko(games, result):
 
 
     print('')
-    print(f'{game_a}: {game_a_glicko} ({game_a_rd}) -> {a_glicko} ({a_rd})')
-    print(f'{game_b}: {game_b_glicko} ({game_b_rd}) -> {b_glicko} ({b_rd})')
+    print(f'{game_a['Title'].iloc[0]}: {game_a_glicko} ({game_a_rd}) -> {a_glicko} ({a_rd})')
+    print(f'{game_b['Title'].iloc[0]}: {game_b_glicko} ({game_b_rd}) -> {b_glicko} ({b_rd})')
     print('')
 
 
@@ -164,5 +166,4 @@ if __name__ == '__main__':
 
     n_trials = int(args.n_trials)
     game = args.game
-    print(game)
     trial(game_a=game)

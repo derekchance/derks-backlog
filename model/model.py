@@ -11,6 +11,7 @@ from .core import MODEL_DIR
 from .core import TARGET
 from .core import richard_curve
 from .xgb import main as xgb
+from .pytabkit import main as realmlp
 
 
 
@@ -117,8 +118,9 @@ def update_models():
     #ridge()
     #print('ElasticNet...')
     #elasticnet()
-    print('XGB...')
-    xgb()
+    #print('XGB...')
+    #xgb()
     #print('Stacking Models (like legos)')
     #stacking()
+    realmlp()
     print('Done.')

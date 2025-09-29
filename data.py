@@ -387,7 +387,7 @@ def mark_dropped(game_id=None, title=None):
 
 def update_model_scores(game_id='all'):
     model_input = load_dataset(game_ids=game_id)
-    model = joblib.load(MODEL_DIR / f'models/xgb_model.joblib')
+    model = joblib.load(MODEL_DIR / f'models/realmlp_model.joblib')
     with warnings.catch_warnings(action='ignore'):
         raw_scores = model.predict(model_input)
     if game_id == 'all':
