@@ -6,6 +6,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 import pandas as pd
+import sqlite3
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 SPREADSHEET_ID = '1XjK0d5AJ1FUbZo6fnWBcOr3EjCVYmISjyC1rB1Wrh8o'
@@ -63,9 +64,17 @@ def _update_values(df: pd.DataFrame, range, creds=None):
         return error
 
 
-def update_backlog_values(df: pd.DataFrame):
-    _update_values(df=df, range='Backlog!A2:G10000')
+def update_backlog_values():
+    with sqlite3.connect('games.db') as con:
+        with open('backlog.sql') as f:
+            query = f.read()
+        df = pd.read_sql(query, con).fillna('')
+    _update_values(df=df, range='Backlog!A2:I10000')
 
 
-def update_log_values(df: pd.DataFrame):
+def update_log_values():
+    with sqlite3.connect('games.db') as con:
+        with open('log.sql') as f:
+            query = f.read()
+        df = pd.read_sql(query, con).fillna('')
     _update_values(df=df, range='Log!A2:I10000')
