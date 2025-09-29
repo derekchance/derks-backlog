@@ -79,7 +79,6 @@ def trial(game_a=None, game_b=None, primary_rating='glicko'):
 
 
 def elo(games, result, k=32):
-    df = pd.read_csv('game_log.csv')
     game_a, game_b = games
     score_a, score_b = result
 
