@@ -1,5 +1,6 @@
 SELECT
     games.id,
+    igdb.id AS igdb_id,
     REPLACE(REPLACE(metacritic.genre, ' ','-'), '-','') AS genre,
     IFNULL(DATETIME(igdb.first_release_date, 'unixepoch'),
             DATETIME(metacritic.releaseDate)) AS release_date,
@@ -50,6 +51,7 @@ SELECT
     prequel_rating.prequel_glicko,
     IIF(classics.id IS NULL, 0 , 1) AS classic,
     IIF(soulslikes.id IS NULL, 0 , 1) AS soulslike,
+    ratings.glicko AS glicko_similar,
     ratings.glicko
 FROM games
 LEFT OUTER JOIN metacritic ON games.id = metacritic.game_id

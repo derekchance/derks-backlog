@@ -11,7 +11,8 @@ from howlongtobeatpy import HowLongToBeat, SearchModifiers
 from sheets import update_backlog_values, update_log_values
 from sklearn.preprocessing import MinMaxScaler
 
-from model.model import MODEL_DIR, load_dataset, adjust_sequels, TARGET, richard_curve
+from model.model import MODEL_DIR, load_dataset, TARGET, richard_curve
+from model.series import SERIES
 
 igdb_client_id = 'w7mohm48mdexvwnjg1dayuku9vuu0h'
 igdb_client_secret = 'fwb7dt2nucfyrvd9mrwaa2ge3oh0cz'
@@ -385,7 +386,8 @@ def mark_dropped(game_id=None, title=None):
         cur = con.cursor()
         cur.executemany(statement, (game_id,))
 
-def update_model_scores(game_id='all'):
+
+def update_raw_model_scores(game_id='all'):
     model_input = load_dataset(game_ids=game_id)
     model = joblib.load(MODEL_DIR / f'models/realmlp_model.joblib')
     with warnings.catch_warnings(action='ignore'):
@@ -411,6 +413,21 @@ def update_model_scores(game_id='all'):
             cur.executemany(statement, model_data)
     else:
         raise('Valid inputs are "all" or the game_id (game.id)')
+
+
+def update_sequel_adjusted_scores():
+    """Gives preference to earlier titles in series with better scoring sequels"""
+    with sqlite3.connect('games.db') as con:
+        with open('series_adj.sql') as f:
+            statement = f.read()
+
+        cur = con.cursor()
+        cur.execute(statement)
+
+
+def update_model_scores(game_id='all'):
+    update_raw_model_scores(game_id=game_id)
+    update_sequel_adjusted_scores()
 
 
 
