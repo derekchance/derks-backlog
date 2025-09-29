@@ -67,15 +67,20 @@ LIST_FEATURES = [
     'game_engines',
     'genres',
     'themes',
-    'keywords',
+    #'keywords',
     'game_modes',
     'involved_companies',
+]
+
+SIMILAR_FEATURES = [
     'similar_games',
+    'igdb_id',
+    'glicko_similar',
 ]
 
 TARGET = 'glicko'
 
-FEATURES = CATEGORICAL_FEATURES + NUMERICAL_MEANED_FEATURES + NUMERICAL_ZEROED_FEATURES + LIST_FEATURES
+FEATURES = CATEGORICAL_FEATURES + NUMERICAL_MEANED_FEATURES + NUMERICAL_ZEROED_FEATURES + LIST_FEATURES + SIMILAR_FEATURES
 
 
 class CategoricalEncoder(OrdinalEncoder):
@@ -124,18 +129,18 @@ class SummarizeSimilar(BaseEstimator,TransformerMixin):
         pool = set()
         for n in X.itertuples():
             try:
-                pool = pool | set(json.loads(n.similar_games_igdb))
+                pool = pool | set(json.loads(n.similar_games))
             except:
                 pass
-        self.map = X.loc[X.id_igdb.isin(pool) & (X.Finished == 1), ['id_igdb', 'glicko']]
-        self.map['id_igdb'] = self.map['id_igdb'].astype(int)
-        self.map.set_index('id_igdb', inplace=True)
+        self.map = X.loc[X.igdb_id.isin(pool), ['igdb_id', 'glicko_similar']]
+        self.map['igdb_id'] = self.map['igdb_id'].astype(int)
+        self.map.set_index('igdb_id', inplace=True)
 
     def transform(self, X):
         results = []
         for n in X.itertuples():
             try:
-                results.append(self.map.reindex(json.loads(n.similar_games_igdb)).mean().iloc[0])
+                results.append(self.map.reindex(json.loads(n.similar_games)).mean().iloc[0])
             except:
                 results.append(np.nan)
         return pd.Series(data=results, index=X.index, name='similar_games_mean_glicko').to_frame()

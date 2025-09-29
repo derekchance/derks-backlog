@@ -8,19 +8,22 @@ from sklearn import set_config
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
+import torch
 
 from .core import (
     PandasCountVectorizer,
     CategoricalEncoder,
+    SummarizeSimilar,
     LIST_FEATURES,
     NUMERICAL_MEANED_FEATURES,
     NUMERICAL_ZEROED_FEATURES,
     CATEGORICAL_FEATURES,
+    SIMILAR_FEATURES,
     MODEL_DIR,
     load_Xy,
 )
 
-
+torch.set_float32_matmul_precision('medium')
 set_config(transform_output='default')
 SEARCH_ITERS = 50
 SEARCH_SCORING_METRIC = 'neg_mean_squared_error'
@@ -32,6 +35,7 @@ numerical_meaned_features = NUMERICAL_MEANED_FEATURES.copy()
 numerical_zeroed_features = NUMERICAL_ZEROED_FEATURES.copy()
 categorical_features = CATEGORICAL_FEATURES.copy()
 list_features = LIST_FEATURES.copy()
+similar_features = SIMILAR_FEATURES.copy()
 
 
 SEARCH_PARAMS = {
@@ -47,17 +51,22 @@ SEARCH_PARAMS = {
 # define preprocessors
 list_transformers = []
 for n in list_features:
-    list_transformers.append((n, PandasCountVectorizer(input='content', lowercase=False, token_pattern=r'^[0-9]*'), n))
+    list_transformers.append((n, PandasCountVectorizer(input='content', lowercase=False, token_pattern=r'\b\w+\b'), n))
 
 categorical_transformer = Pipeline([
     ('encode', CategoricalEncoder(handle_unknown='use_encoded_value', unknown_value=np.nan)),
 ])
 
+similar_transformer = Pipeline([
+    ('encode', SummarizeSimilar()),
+    ('impute', SimpleImputer())
+])
+
 nonlist_transformers = [
     ('categorical', categorical_transformer, categorical_features),
     ('numerical', SimpleImputer(fill_value='mean'), numerical_meaned_features+numerical_zeroed_features),
+    ('similar', similar_transformer, similar_features),
 ]
-
 
 column_transformer = ColumnTransformer(
     transformers=nonlist_transformers+list_transformers,
@@ -71,8 +80,8 @@ categorical_columns = [f'categorical__{n}' for n in categorical_features]
 model = Pipeline([
         ('preprocess', column_transformer),
         ('rgr', ptk.RealMLP_HPO_Regressor(
-            n_cv=8, hpo_space_name='tabarena', use_caruana_ensembling=True, n_hyperopt_steps=50,
-            val_metric_name='rmse', n_epochs=1024
+            n_cv=6, hpo_space_name='tabarena', use_caruana_ensembling=True, n_hyperopt_steps=50,
+            val_metric_name='rmse'
         ))
 ])
 
